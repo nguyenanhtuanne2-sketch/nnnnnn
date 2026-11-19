@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>     </title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: linear-gradient(180deg, #080519 0%, #1b0e3d 42%, #3a1652 74%, #5a2150 100%);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    touch-action: none;
+  }
+  canvas, svg { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #fx, #bg { pointer-events: none; }
+  .vignette {
+    position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(4,2,14,.62) 100%);
+  }
+  .hint {
+    position: fixed; top: 22px; left: 0; right: 0; text-align: center;
+    color: rgba(255,225,245,.85); font-size: 15px; letter-spacing: .14em;
+    text-shadow: 0 0 12px rgba(255,120,200,.8);
+    opacity: 0; animation: hint 9s 4s ease-in-out forwards; pointer-events: none;
+  }
+  @keyframes hint { 0%{opacity:0} 15%{opacity:1} 80%{opacity:1} 100%{opacity:0} }
+
+  /* ---------- SVG animations ---------- */
+  .stem { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1.8s .2s ease-out forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+
+  .petal { transform-origin: 0 0; transform: scale(0); animation: petalBloom 1.5s cubic-bezier(.2,.85,.25,1.12) both; }
+  @keyframes petalBloom {
+    from { transform: scale(0) rotate(-28deg); }
+    to   { transform: scale(1) rotate(0deg); }
+  }
+  .flutter { transform-origin: 0 0; animation: flutter 4.5s ease-in-out infinite alternate; }
+  @keyframes flutter { from { transform: rotate(-1.6deg); } to { transform: rotate(1.6deg); } }
+
+  .center { transform-origin: 0 0; transform: scale(0); animation: popIn 1.4s 3.9s cubic-bezier(.2,.8,.25,1.35) both; }
+  @keyframes popIn { from { transform: scale(0); } to { transform: scale(1); } }
+
+  .leafGrow { transform-origin: 0 0; transform: scale(0); animation: popIn 1.3s ease-out both; }
+  .leafFlutter { transform-origin: 0 0; animation: leafSway 5s ease-in-out infinite alternate; }
+  @keyframes leafSway { from { transform: rotate(-3.5deg); } to { transform: rotate(3.5deg); } }
+
+  .glow { transform-origin: 300px 300px; animation: breathe 4.5s ease-in-out infinite; }
+  @keyframes breathe { 0%,100% { opacity: .55; transform: scale(1); } 50% { opacity: 1; transform: scale(1.1); } }
+
+  .rays { transform-origin: 0 0; animation: spin 90s linear infinite; }
+  .orbit { transform-origin: 0 0; animation: spin 55s linear infinite reverse; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .twinkle { transform-box: fill-box; transform-origin: center; opacity: 0; animation: twinkle 3s ease-in-out infinite; }
+  @keyframes twinkle { 0%,100% { opacity: 0; transform: scale(.2) rotate(0deg); } 50% { opacity: 1; transform: scale(1) rotate(45deg); } }
+
+  .dew { opacity: 0; animation: fadeIn 1.5s forwards; }
+  @keyframes fadeIn { to { opacity: 1; } }
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+
+<svg id="scene" viewBox="0 0 600 800" preserveAspectRatio="xMidYMax meet" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- gradient cánh hoa: gốc đậm -> ngọn nhạt -->
+    <linearGradient id="pg0" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#a3155f"/><stop offset=".4" stop-color="#e0488f"/><stop offset=".8" stop-color="#ff8cc4"/><stop offset="1" stop-color="#ffd0e8"/></linearGradient>
+    <linearGradient id="pg1" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#b51d6c"/><stop offset=".4" stop-color="#ef5fa4"/><stop offset=".8" stop-color="#ff9fd0"/><stop offset="1" stop-color="#ffdcee"/></linearGradient>
+    <linearGradient id="pg2" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#c92a7c"/><stop offset=".4" stop-color="#f77ab5"/><stop offset=".8" stop-color="#ffb3d9"/><stop offset="1" stop-color="#ffe6f3"/></linearGradient>
+    <linearGradient id="pg3" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#e04a92"/><stop offset=".4" stop-color="#ff93c6"/><stop offset=".8" stop-color="#ffc9e4"/><stop offset="1" stop-color="#fff0f8"/></linearGradient>
+    <linearGradient id="pg4" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#f06aa6"/><stop offset=".4" stop-color="#ffadd4"/><stop offset=".8" stop-color="#ffd9ec"/><stop offset="1" stop-color="#fff5fa"/></linearGradient>
+    <linearGradient id="shade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6b0a3a" stop-opacity=".38"/><stop offset=".5" stop-color="#6b0a3a" stop-opacity="0"/><stop offset="1" stop-color="#6b0a3a" stop-opacity=".28"/></linearGradient>
+    <linearGradient id="hi" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff" stop-opacity=".5"/></linearGradient>
+
+    <radialGradient id="glowG"><stop offset="0" stop-color="#ff7ac6" stop-opacity=".8"/><stop offset=".55" stop-color="#b66bff" stop-opacity=".22"/><stop offset="1" stop-color="#b66bff" stop-opacity="0"/></radialGradient>
+    <linearGradient id="rayG" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ffd6f0" stop-opacity=".24"/><stop offset="1" stop-color="#ffd6f0" stop-opacity="0"/></linearGradient>
+    <radialGradient id="cg" cx=".4" cy=".35"><stop offset="0" stop-color="#fff3a0"/><stop offset=".6" stop-color="#ffc233"/><stop offset="1" stop-color="#d9741a"/></radialGradient>
+    <radialGradient id="dewG" cx=".35" cy=".3"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".4" stop-color="#d4f1ff" stop-opacity=".5"/><stop offset="1" stop-color="#8fd0ff" stop-opacity=".28"/></radialGradient>
+    <linearGradient id="stemG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#1e6a3e"/><stop offset=".45" stop-color="#3da565"/><stop offset="1" stop-color="#16452c"/></linearGradient>
+    <linearGradient id="leafG" x1="0" y1="0" x2="1" y2=".2"><stop offset="0" stop-color="#1b5e38"/><stop offset=".5" stop-color="#2f9158"/><stop offset="1" stop-color="#7fe0a3"/></linearGradient>
+    <linearGradient id="leafShade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".14"/><stop offset="1" stop-color="#002814" stop-opacity=".32"/></linearGradient>
+
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#4a0630" flood-opacity=".45"/>
+    </filter>
+    <filter id="glowF" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="leafShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#021a0c" flood-opacity=".45"/>
+    </filter>
+  </defs>
+
+  <g id="plant">
+    <circle class="glow" cx="300" cy="300" r="300" fill="url(#glowG)"/>
+    <g transform="translate(300,300)"><g class="rays" id="rays"></g></g>
+    <g transform="translate(300,300)"><g class="orbit" id="orbit"></g></g>
+
+    <!-- thân -->
+    <path class="stem" pathLength="1" d="M300,800 C285,680 325,520 300,300" fill="none" stroke="url(#stemG)" stroke-width="11" stroke-linecap="round"/>
+    <path class="stem" pathLength="1" d="M298,800 C283,680 323,520 298,302" fill="none" stroke="#9af0b8" stroke-opacity=".35" stroke-width="2.4" stroke-linecap="round"/>
+
+    <g id="leaves" filter="url(#leafShadow)"></g>
+
+    <!-- hoa -->
+    <g id="flower" transform="translate(300,300)" filter="url(#shadow)">
+      <g id="petals"></g>
+      <g class="center" id="center"></g>
+      <g id="dew"></g>
+    </g>
+  </g>
+</svg>
+
+<canvas id="fx"></canvas>
+<div class="vignette"></div>
+<div class="hint"> chạm vào thử đi</div>
+
+<script>
+(() => {
+'use strict';
+const NS = 'http://www.w3.org/2000/svg';
+const $ = id => document.getElementById(id);
+const rnd = (a, b) => a + Math.random() * (b - a);
+const el = (tag, attrs, parent) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+};
+
+/* =====================  DỰNG HOA (SVG)  ===================== */
+const petalPath = (L, hw) => {
+  const c = hw * 1.35;
+  return `M0,0 C${-c},${-L*.18} ${-c*1.05},${-L*.72} 0,${-L} C${c*1.05},${-L*.72} ${c},${-L*.18} 0,0Z`;
+};
+
+const petalsG = $('petals');
+const layers = [
+  { n: 13, L: 196, hw: .30, fill: 'url(#pg0)', off: 0,  delay: 0 },
+  { n: 13, L: 172, hw: .31, fill: 'url(#pg1)', off: 13, delay: .35 },
+  { n: 11, L: 146, hw: .31, fill: 'url(#pg2)', off: 7,  delay: .7 },
+  { n: 9,  L: 116, hw: .32, fill: 'url(#pg3)', off: 20, delay: 1.05 },
+  { n: 7,  L: 84,  hw: .34, fill: 'url(#pg4)', off: 3,  delay: 1.4 },
+];
+layers.forEach(Ly => {
+  for (let i = 0; i < Ly.n; i++) {
+    const L = Ly.L * rnd(.95, 1.05), hw = L * Ly.hw * rnd(.94, 1.06);
+    const ang = 360 / Ly.n * i + Ly.off + rnd(-3, 3);
+    const outer = el('g', { transform: `rotate(${ang.toFixed(2)}) skewX(${rnd(-4, 4).toFixed(2)})` }, petalsG);
+    const fl = el('g', { class: 'flutter' }, outer);
+    fl.style.animationDuration = rnd(3.5, 6) + 's';
+    fl.style.animationDelay = (-rnd(0, 6)) + 's';
+    const pe = el('g', { class: 'petal' }, fl);
+    pe.style.animationDelay = (1.5 + Ly.delay + i * .05) + 's';
+    const d = petalPath(L, hw);
+    el('path', { d, fill: Ly.fill, stroke: 'rgba(255,255,255,.28)', 'stroke-width': 1.1 }, pe);
+    el('path', { d, fill: 'url(#shade)' }, pe);
+    el('path', { d, fill: 'url(#hi)' }, pe);
+    for (const k of [-1, 0, 1]) {
+      el('path', {
+        d: `M0,${-L*.06} Q${k*hw*.55},${-L*.5} ${k*hw*.38},${-L*.9}`,
+        fill: 'none',
+        stroke: k === 0 ? 'rgba(120,0,60,.18)' : 'rgba(255,255,255,.22)',
+        'stroke-width': 1
+      }, pe);
+    }
+  }
+});
+
+/* nhụy + nhị */
+const cen = $('center');
+const stam = el('g', { filter: 'url(#glowF)' }, cen);
+el('circle', { r: 19, fill: 'url(#cg)' }, stam);
+const golden = Math.PI * (3 - Math.sqrt(5));
+for (let i = 0; i < 70; i++) {
+  const r = 1.7 * Math.sqrt(i), a = i * golden;
+  el('circle', {
+    cx: Math.cos(a) * r, cy: Math.sin(a) * r, r: 1 + i * .008,
+    fill: i % 2 ? '#a85a0c' : '#fff0a8', 'fill-opacity': .85
+  }, stam);
+}
+for (let i = 0; i < 46; i++) {
+  const a = rnd(0, Math.PI * 2), len = rnd(22, 46), r0 = 14;
+  const x = Math.cos(a) * len, y = Math.sin(a) * len;
+  el('line', {
+    x1: Math.cos(a) * r0, y1: Math.sin(a) * r0, x2: x, y2: y,
+    stroke: '#ffd24d', 'stroke-width': rnd(.7, 1.3), 'stroke-linecap': 'round'
+  }, stam);
+  el('circle', { cx: x, cy: y, r: rnd(1.8, 3), fill: i % 3 ? '#fff3a6' : '#ff9f2e' }, stam);
+}
+
+/* giọt sương */
+const dewG = $('dew');
+const starD = 'M0,-9 L1.6,-1.6 L9,0 L1.6,1.6 L0,9 L-1.6,1.6 L-9,0 L-1.6,-1.6Z';
+for (let i = 0; i < 16; i++) {
+  const r = rnd(55, 165), a = rnd(0, Math.PI * 2);
+  const x = Math.cos(a) * r, y = Math.sin(a) * r, s = rnd(2.6, 5);
+  const g = el('g', { class: 'dew', transform: `translate(${x.toFixed(1)},${y.toFixed(1)})` }, dewG);
+  g.style.animationDelay = (5.8 + rnd(0, 2)) + 's';
+  el('ellipse', { rx: s, ry: s * 1.15, fill: 'url(#dewG)', stroke: 'rgba(255,255,255,.65)', 'stroke-width': .6 }, g);
+  el('circle', { cx: -s * .3, cy: -s * .4, r: s * .28, fill: '#fff' }, g);
+  const sp = el('path', { d: starD, fill: '#fff', class: 'twinkle', transform: `scale(${(s / 4).toFixed(2)})` }, g);
+  sp.style.animationDelay = rnd(0, 4) + 's';
+  sp.style.animationDuration = rnd(2.5, 5) + 's';
+}
+
+/* tia sáng */
+const raysG = $('rays');
+for (let i = 0; i < 16; i++) {
+  const a = 360 / 16 * i + rnd(-6, 6), w = rnd(10, 26), l = rnd(380, 560);
+  el('polygon', { points: `0,0 ${-w},${-l} ${w},${-l}`, fill: 'url(#rayG)', transform: `rotate(${a.toFixed(1)})`, opacity: rnd(.5, 1).toFixed(2) }, raysG);
+}
+
+/* các đốm sáng quay quanh hoa */
+const orbitG = $('orbit');
+const sparkCols = ['#ffffff', '#ffd1ec', '#fff0a8'];
+for (let i = 0; i < 24; i++) {
+  const r = rnd(200, 310), a = rnd(0, Math.PI * 2);
+  const g = el('g', { transform: `translate(${(Math.cos(a) * r).toFixed(1)},${(Math.sin(a) * r).toFixed(1)}) scale(${rnd(.6, 1.6).toFixed(2)})` }, orbitG);
+  const p = el('path', { d: starD, fill: sparkCols[i % 3], class: 'twinkle' }, g);
+  p.style.animationDelay = rnd(0, 4) + 's';
+  p.style.animationDuration = rnd(2, 5) + 's';
+}
+
+/* lá */
+const leavesG = $('leaves');
+const leafD = 'M0,0 C22,-40 100,-46 158,-8 C100,32 24,30 0,0Z';
+[
+  { x: 297, y: 702, r: -34, m: 1, s: 1.1,  d: .9 },
+  { x: 304, y: 590, r: -40, m: 0, s: 1,    d: 1.05 },
+  { x: 308, y: 462, r: -32, m: 1, s: .78,  d: 1.2 },
+  { x: 300, y: 650, r: -18, m: 0, s: .62,  d: 1.0 },
+].forEach(sp => {
+  const g = el('g', { transform: `translate(${sp.x},${sp.y}) ${sp.m ? 'scale(-1,1) ' : ''}rotate(${sp.r}) scale(${sp.s})` }, leavesG);
+  const fl = el('g', { class: 'leafFlutter' }, g);
+  fl.style.animationDelay = (-rnd(0, 5)) + 's';
+  fl.style.animationDuration = rnd(4, 6.5) + 's';
+  const gr = el('g', { class: 'leafGrow' }, fl);
+  gr.style.animationDelay = sp.d + 's';
+  el('path', { d: leafD, fill: 'url(#leafG)', stroke: 'rgba(190,255,215,.25)', 'stroke-width': 1 }, gr);
+  el('path', { d: leafD, fill: 'url(#leafShade)' }, gr);
+  el('path', { d: 'M0,0 C55,-10 110,-14 156,-8', fill: 'none', stroke: 'rgba(210,255,225,.55)', 'stroke-width': 1.8, 'stroke-linecap': 'round' }, gr);
+  [28, 58, 88, 118].forEach(x => {
+    const y = -x * .09;
+    el('path', { d: `M${x},${y} l20,-17`, stroke: 'rgba(210,255,225,.3)', 'stroke-width': 1, fill: 'none' }, gr);
+    el('path', { d: `M${x},${y} l20,16`,  stroke: 'rgba(210,255,225,.3)', 'stroke-width': 1, fill: 'none' }, gr);
+  });
+});
+
+/* =====================  CANVAS: NỀN & HIỆU ỨNG  ===================== */
+const bg = $('bg'), fxc = $('fx');
+const bctx = bg.getContext('2d'), ctx = fxc.getContext('2d');
+const stat = document.createElement('canvas');
+let W, H, dpr, S, offX, offY, FX, FY;
+let stars = [], bokeh = [], blades = [];
+
+function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = innerWidth; H = innerHeight;
+  for (const c of [bg, fxc]) { c.width = W * dpr; c.height = H * dpr; }
+  bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  S = Math.min(W / 600, H / 800);
+  offX = (W - 600 * S) / 2; offY = H - 800 * S;
+  FX = offX + 300 * S; FY = offY + 300 * S;
+  initStars(); initBokeh(); initGrass(); buildStatic();
+}
+
+function initStars() {
+  stars = [];
+  const n = Math.min(240, Math.floor(W * H / 8000));
+  for (let i = 0; i < n; i++) stars.push({ x: rnd(0, W), y: rnd(0, H * .72), r: rnd(.4, 1.5), a: rnd(.35, 1), sp: rnd(.8, 3), ph: rnd(0, 6.28) });
+}
+function initBokeh() {
+  bokeh = [];
+  for (let i = 0; i < 20; i++) bokeh.push({
+    x: rnd(0, W), y: rnd(0, H), r: rnd(18, 60) * Math.max(S, .7),
+    vx: rnd(-.12, .12), vy: rnd(-.25, -.05), a: rnd(.03, .09), h: [300, 320, 280, 45][i % 4], ph: rnd(0, 6.28)
+  });
+}
+function initGrass() {
+  blades = [];
+  const n = Math.floor(W / 3);
+  const back = ['#0f3d24', '#124a2b', '#0c3320'], front = ['#1d6b3a', '#2a8a4c', '#1a5a33', '#37a35a'];
+  for (let i = 0; i < n; i++) {
+    const row = Math.random() < .45 ? 0 : 1;
+    const h = H * (.022 + Math.pow(Math.random(), 2.2) * .085);
+    blades.push({
+      x: rnd(-10, W + 10), h, w: rnd(2, 4.5), bend: rnd(-.25, .25), ph: rnd(0, 6.28), row,
+      col: (row ? front : back)[Math.floor(Math.random() * (row ? 4 : 3))],
+      daisy: row && h > H * .07 && Math.random() < .35 ? ['#ffffff', '#ffc2e2', '#fff2a0'][Math.floor(Math.random() * 3)] : null
+    });
+  }
+  blades.sort((a, b) => a.row - b.row);
+}
+function buildStatic() {
+  stat.width = W * dpr; stat.height = H * dpr;
+  const c = stat.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // mặt trăng
+  const mx = W * .16, my = H * .17, mr = Math.min(W, H) * .055;
+  let g = c.createRadialGradient(mx, my, mr * .5, mx, my, mr * 5);
+  g.addColorStop(0, 'rgba(255,240,220,.35)'); g.addColorStop(1, 'rgba(255,240,220,0)');
+  c.fillStyle = g; c.fillRect(mx - mr * 5, my - mr * 5, mr * 10, mr * 10);
+  g = c.createRadialGradient(mx - mr * .3, my - mr * .3, mr * .1, mx, my, mr);
+  g.addColorStop(0, '#fffbe9'); g.addColorStop(1, '#f0d9b5');
+  c.fillStyle = g; c.beginPath(); c.arc(mx, my, mr, 0, 6.283); c.fill();
+  c.fillStyle = 'rgba(180,150,110,.25)';
+  [[-.3, -.2, .22], [.28, .1, .3], [-.1, .4, .16], [.1, -.45, .12]].forEach(([dx, dy, k]) => {
+    c.beginPath(); c.arc(mx + dx * mr, my + dy * mr, k * mr, 0, 6.283); c.fill();
+  });
+  // mặt đất
+  g = c.createLinearGradient(0, H * .88, 0, H);
+  g.addColorStop(0, 'rgba(8,24,14,0)'); g.addColorStop(1, 'rgba(4,12,7,.95)');
+  c.fillStyle = g; c.fillRect(0, H * .88, W, H * .12);
+}
+
+/* sprite phát sáng */
+function makeGlow(rgb) {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)');
+  gr.addColorStop(.15, `rgba(${rgb},1)`);
+  gr.addColorStop(.5, `rgba(${rgb},.25)`);
+  gr.addColorStop(1, `rgba(${rgb},0)`);
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  return c;
+}
+const glowGold = makeGlow('255,214,102'), glowPink = makeGlow('255,140,200'), glowCyan = makeGlow('140,230,255');
+
+/* ---------- trạng thái ---------- */
+const mouse = { x: -9999, y: -9999, on: false };
+let wind = 0, pulse = 0, tilt = 0, tiltT = 0, headLag = 0;
+let shoot = null, nextShoot = 4;
+const fireflies = [], motes = [], fallen = [];
+for (let i = 0; i < 30; i++) fireflies.push({
+  x: rnd(0, innerWidth), y: rnd(innerHeight * .2, innerHeight * .95),
+  vx: rnd(-.4, .4), vy: rnd(-.4, .4), ph: rnd(0, 6.28), size: rnd(.5, 1.2), pink: Math.random() < .3
+});
+const butterflies = [
+  { f: 1,   p: 0,   rx: 300, ry: 190, c1: '#7fe9ff', c2: '#b78cff' },
+  { f: .8,  p: 3.1, rx: 250, ry: 150, c1: '#ffd36b', c2: '#ff8fc9' },
+];
+const petalCols = [['#ff7cbc', '#ffd1e8'], ['#e84a9a', '#ffb8dc'], ['#ff9ccb', '#fff0f8']];
+
+function spawnFall(burst, x, y) {
+  const col = petalCols[Math.floor(Math.random() * 3)];
+  const p = {
+    x, y, c1: col[0], c2: col[1], size: rnd(14, 24) * Math.max(S, .7),
+    rot: rnd(0, 6.28), vr: rnd(-.04, .04), ph: rnd(0, 6.28), pf: rnd(.03, .08),
+    seed: rnd(0, 6.28), alpha: 1, landed: false, age: 0, gy: H - rnd(4, 18)
+  };
+  if (burst) {
+    const a = rnd(0, 6.28), sp = rnd(1.5, 5);
+    p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp - 1.5; p.g = .05; p.vmax = 1.4;
+  } else {
+    p.vx = rnd(-.3, .3); p.vy = rnd(.1, .4); p.g = .012; p.vmax = rnd(.7, 1.2);
+  }
+  fallen.push(p);
+  if (fallen.length > 120) fallen.shift();
+}
+function mote(x, y, vx, vy, max, size, spr, mode, drag, g) {
+  motes.push({ x, y, vx, vy, life: 0, max, size, spr, mode, drag: drag || .99, g: g || 0 });
+}
+
+/* ---------- vẽ nền ---------- */
+function drawBg(t, dt) {
+  const c = bctx;
+  c.clearRect(0, 0, W, H);
+  for (const s of stars) {
+    const a = s.a * (.5 + .5 * Math.sin(t * s.sp + s.ph));
+    c.fillStyle = `rgba(255,255,255,${a.toFixed(3)})`;
+    c.beginPath(); c.arc(s.x, s.y, s.r, 0, 6.283); c.fill();
+  }
+  c.drawImage(stat, 0, 0, W, H);
+
+  // bokeh
+  c.globalCompositeOperation = 'lighter';
+  for (const b of bokeh) {
+    b.x += b.vx * dt; b.y += b.vy * dt;
+    if (b.y < -b.r) { b.y = H + b.r; b.x = rnd(0, W); }
+    if (b.x < -b.r) b.x = W + b.r; if (b.x > W + b.r) b.x = -b.r;
+    const a = b.a * (.7 + .3 * Math.sin(t * .6 + b.ph));
+    c.fillStyle = `hsla(${b.h},80%,70%,${a.toFixed(3)})`;
+    c.beginPath(); c.arc(b.x, b.y, b.r, 0, 6.283); c.fill();
+    c.strokeStyle = `hsla(${b.h},90%,80%,${(a * 1.6).toFixed(3)})`; c.lineWidth = 1.2; c.stroke();
+  }
+  c.globalCompositeOperation = 'source-over';
+
+  // sao băng
+  if (!shoot && t > nextShoot) {
+    shoot = { x: rnd(W * .3, W * .95), y: rnd(0, H * .3), vx: -rnd(9, 14), vy: rnd(4, 7), life: 0 };
+    nextShoot = t + rnd(5, 10);
+  }
+  if (shoot) {
+    shoot.x += shoot.vx * dt; shoot.y += shoot.vy * dt; shoot.life += dt;
+    const a = 1 - shoot.life / 60;
+    if (a <= 0) shoot = null;
+    else {
+      const tx = shoot.x - shoot.vx * 9, ty = shoot.y - shoot.vy * 9;
+      const g = c.createLinearGradient(shoot.x, shoot.y, tx, ty);
+      g.addColorStop(0, `rgba(255,255,255,${a})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+      c.strokeStyle = g; c.lineWidth = 2; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(shoot.x, shoot.y); c.lineTo(tx, ty); c.stroke();
+    }
+  }
+
+  // ánh hồng hắt xuống đất
+  c.save(); c.translate(FX, H); c.scale(1, .22);
+  const R = Math.min(W * .4, 420 * S);
+  const g = c.createRadialGradient(0, 0, 0, 0, 0, R);
+  g.addColorStop(0, 'rgba(255,120,200,.55)'); g.addColorStop(1, 'rgba(255,120,200,0)');
+  c.globalAlpha = .6 + .15 * Math.sin(t * 1.4);
+  c.fillStyle = g; c.beginPath(); c.arc(0, 0, R, 0, 6.283); c.fill();
+  c.restore();
+}
+
+/* ---------- cỏ ---------- */
+function drawGrass(t) {
+  const baseY = H + 2;
+  for (const b of blades) {
+    let sway = Math.sin(t * 1.4 + b.ph + b.x * .004) * b.h * .16 + wind * b.h * .22;
+    const dx = b.x - mouse.x, dy = (baseY - b.h * .6) - mouse.y, d2 = dx * dx + dy * dy;
+    if (d2 < 16000) sway += (dx > 0 ? 1 : -1) * (1 - d2 / 16000) * b.h * .55;
+    const tipx = b.x + b.bend * b.h + sway, tipy = baseY - b.h;
+    ctx.fillStyle = b.col;
+    ctx.beginPath();
+    ctx.moveTo(b.x - b.w, baseY);
+    ctx.quadraticCurveTo(b.x - b.w * .4 + (tipx - b.x) * .3, baseY - b.h * .55, tipx, tipy);
+    ctx.quadraticCurveTo(b.x + b.w * .4 + (tipx - b.x) * .5, baseY - b.h * .5, b.x + b.w, baseY);
+    ctx.fill();
+    if (b.daisy) {
+      ctx.fillStyle = b.daisy;
+      for (let k = 0; k < 6; k++) {
+        const a = k * 1.047;
+        ctx.beginPath(); ctx.arc(tipx + Math.cos(a) * 3.6, tipy + Math.sin(a) * 3.6, 2.6, 0, 6.283); ctx.fill();
+      }
+      ctx.fillStyle = '#f5a623'; ctx.beginPath(); ctx.arc(tipx, tipy, 2.2, 0, 6.283); ctx.fill();
+    }
+  }
+}
+
+/* ---------- bướm ---------- */
+function butterflyPos(b, t) {
+  return {
+    x: FX + Math.cos(t * .35 * b.f + b.p) * b.rx * S + Math.sin(t * 1.1 + b.p) * 20,
+    y: FY + Math.sin(t * .5 * b.f + b.p * 1.3) * b.ry * S - 10 + Math.sin(t * 2.3 + b.p) * 12
+  };
+}
+function drawButterfly(b, t) {
+  const p = butterflyPos(b, t), q = butterflyPos(b, t + .02);
+  const ang = Math.atan2(q.y - p.y, q.x - p.x) + Math.PI / 2;
+  const size = .5 * Math.max(S, .7);
+  const flap = .25 + .75 * Math.abs(Math.sin(t * 9 + b.p));
+  ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = .45;
+  ctx.drawImage(glowCyan, p.x - 55, p.y - 55, 110, 110);
+  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(ang); ctx.scale(size, size);
+  for (const side of [1, -1]) {
+    ctx.save(); ctx.scale(side * flap, 1);
+    const g = ctx.createLinearGradient(0, 0, 50, -20);
+    g.addColorStop(0, b.c2); g.addColorStop(1, b.c1);
+    ctx.fillStyle = g; ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(0, -2); ctx.bezierCurveTo(14, -36, 52, -44, 50, -14); ctx.bezierCurveTo(48, 6, 22, 10, 0, 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, 2); ctx.bezierCurveTo(18, 8, 34, 22, 24, 34); ctx.bezierCurveTo(14, 42, 4, 22, 0, 6); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.7)';
+    ctx.beginPath(); ctx.arc(32, -18, 4, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(20, 22, 3, 0, 6.283); ctx.fill();
+    ctx.restore();
+  }
+  ctx.fillStyle = '#2a1840'; ctx.beginPath(); ctx.ellipse(0, 4, 2.6, 15, 0, 0, 6.283); ctx.fill();
+  ctx.strokeStyle = '#2a1840'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(0, -10); ctx.quadraticCurveTo(-8, -26, -14, -28); ctx.moveTo(0, -10); ctx.quadraticCurveTo(8, -26, 14, -28); ctx.stroke();
+  ctx.restore();
+}
+
+/* ---------- cánh hoa rơi ---------- */
+function drawPetal(p) {
+  const sx = Math.cos(p.ph);
+  if (Math.abs(sx) < .06) return;
+  ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.scale(sx, 1); ctx.globalAlpha = p.alpha;
+  const L = p.size, c = L * .3 * 1.35;
+  const g = ctx.createLinearGradient(0, 0, 0, -L);
+  g.addColorStop(0, p.c1); g.addColorStop(1, p.c2);
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.moveTo(0, 0);
+  ctx.bezierCurveTo(-c, -L * .18, -c * 1.05, -L * .72, 0, -L);
+  ctx.bezierCurveTo(c * 1.05, -L * .72, c, -L * .18, 0, 0); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = .8; ctx.stroke();
+  ctx.restore();
+}
+
+/* ---------- vòng lặp chính ---------- */
+const plant = $('plant'), flowerG = $('flower');
+let last = performance.now(), t0 = last, nextFall = 3.5;
+
+function frame(now) {
+  const dt = Math.min((now - last) / 16.667, 3); last = now;
+  const t = (now - t0) / 1000;
+
+  wind = Math.sin(t * .4) * .5 + Math.sin(t * .13 + 2) * .5;
+
+  /* đung đưa + nghiêng theo chuột */
+  tilt += (tiltT - tilt) * .06;
+  const a = wind * 1.2 + Math.sin(t * .9) * .6 + tilt;
+  plant.setAttribute('transform', `rotate(${a.toFixed(3)} 300 800)`);
+  headLag += (a - headLag) * .06;
+  pulse *= .94;
+  flowerG.setAttribute('transform',
+    `translate(300,300) rotate(${((headLag - a) * 1.6).toFixed(3)}) scale(${(1 + pulse * .07 + Math.sin(t * 1.6) * .006).toFixed(4)})`);
+
+  drawBg(t, dt);
+  ctx.clearRect(0, 0, W, H);
+
+  drawGrass(t);
+
+  /* phấn hoa */
+  if (t > 4 && Math.random() < .3 * dt) {
+    mote(FX + rnd(-20, 20) * S, FY + rnd(-20, 20) * S, rnd(-.3, .3), -rnd(.2, .7), rnd(180, 380), rnd(5, 11), glowGold, 'sin', .999, 0);
+  }
+  /* cánh hoa rơi tự nhiên */
+  if (t > nextFall) { spawnFall(false, FX + rnd(-110, 110) * S, FY + rnd(-40, 80) * S); nextFall = t + rnd(.8, 1.8); }
+
+  /* bướm */
+  for (const b of butterflies) if (t > 6) drawButterfly(b, t);
+
+  /* đom đóm */
+  ctx.globalCompositeOperation = 'lighter';
+  for (const f of fireflies) {
+    f.vx += rnd(-.04, .04) * dt; f.vy += rnd(-.04, .04) * dt;
+    const dx = mouse.x - f.x, dy = mouse.y - f.y;
+    if (dx * dx + dy * dy < 62500) { f.vx += dx * .00015 * dt; f.vy += dy * .00015 * dt; }
+    f.vx = Math.max(-.9, Math.min(.9, f.vx)); f.vy = Math.max(-.9, Math.min(.9, f.vy));
+    f.x += f.vx * dt; f.y += f.vy * dt;
+    if (f.x < 0) f.x = W; if (f.x > W) f.x = 0;
+    if (f.y < H * .15) f.vy += .02; if (f.y > H * .96) f.vy -= .03;
+    const al = .35 + .65 * (.5 + .5 * Math.sin(t * 2 + f.ph)), sz = 14 + f.size * 10;
+    ctx.globalAlpha = al;
+    ctx.drawImage(f.pink ? glowPink : glowGold, f.x - sz, f.y - sz, sz * 2, sz * 2);
+  }
+  /* mote: phấn + tia lấp lánh */
+  for (let i = motes.length - 1; i >= 0; i--) {
+    const m = motes[i];
+    m.vx *= Math.pow(m.drag, dt); m.vy = m.vy * Math.pow(m.drag, dt) + m.g * dt;
+    m.x += m.vx * dt + Math.sin(t * 2 + i) * .15; m.y += m.vy * dt; m.life += dt;
+    if (m.life >= m.max) { motes.splice(i, 1); continue; }
+    ctx.globalAlpha = m.mode === 'sin' ? Math.sin(Math.PI * m.life / m.max) : 1 - m.life / m.max;
+    ctx.drawImage(m.spr, m.x - m.size, m.y - m.size, m.size * 2, m.size * 2);
+  }
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+
+  /* cánh hoa */
+  for (let i = fallen.length - 1; i >= 0; i--) {
+    const p = fallen[i];
+    if (!p.landed) {
+      p.vy = Math.min(p.vy + p.g * dt, p.vmax); p.vx *= Math.pow(.99, dt);
+      p.x += (p.vx + Math.sin(t * 1.3 + p.seed) * .55 + wind * .35) * dt;
+      p.y += p.vy * dt; p.rot += p.vr * dt; p.ph += p.pf * dt;
+      if (p.y >= p.gy) { p.landed = true; p.y = p.gy; p.vy = p.vx = p.vr = p.pf = 0; }
+    } else {
+      p.age += dt;
+      if (p.age > 900) p.alpha -= .01 * dt;
+      if (p.alpha <= 0) { fallen.splice(i, 1); continue; }
+    }
+    drawPetal(p);
+  }
+  ctx.globalAlpha = 1;
+
+  requestAnimationFrame(frame);
+}
+
+/* ---------- tương tác ---------- */
+addEventListener('pointermove', e => {
+  mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true;
+  tiltT = (e.clientX / W - .5) * 5;
+});
+addEventListener('pointerdown', e => {
+  mouse.x = e.clientX; mouse.y = e.clientY;
+  pulse = 1;
+  for (let i = 0; i < 18; i++) spawnFall(true, e.clientX, e.clientY);
+  for (let i = 0; i < 36; i++) {
+    const a = rnd(0, 6.283), sp = rnd(1.5, 5);
+    mote(e.clientX, e.clientY, Math.cos(a) * sp, Math.sin(a) * sp, rnd(40, 80), rnd(6, 14), i % 2 ? glowGold : glowPink, 'out', .95, .02);
+  }
+});
+addEventListener('pointerleave', () => { mouse.x = mouse.y = -9999; tiltT = 0; });
+addEventListener('resize', resize);
+
+resize();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
